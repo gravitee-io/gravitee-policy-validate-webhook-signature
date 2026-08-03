@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2015 The Gravitee team (http://gravitee.io)
+ * Copyright (C) 2025 The Gravitee team (http://gravitee.io)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@
  */
 package io.gravitee.policy.webhook_signature_validator.configuration;
 
-//import io.gravitee.plugin.annotation.ConfigurationEvaluator;
-import io.gravitee.policy.api.PolicyConfiguration;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -26,15 +24,20 @@ import lombok.Setter;
  */
 @Getter
 @Setter
-public class WebhookSignatureValidatorPolicyConfiguration implements PolicyConfiguration {
+public class TimestampValidityConfiguration {
 
-    private String sourceSignatureHeader;
+    // Optional - When enabled, this policy requires a timestamp (epoch seconds) header, includes it in the
+    // recomputed HMAC, and rejects the request if the timestamp is missing, malformed, or outside the allowed age/skew
+    private boolean enabled;
 
-    private SchemeTypeConfiguration schemeType = new SchemeTypeConfiguration();
+    private String sourceTimestampHeader;
 
-    private TimestampValidityConfiguration timestampValidity = new TimestampValidityConfiguration();
+    // Delimiter placed between the timestamp header value and the rest of the signed content
+    private String delimiter;
 
-    private String algorithm;
+    // Maximum age (in seconds) a timestamp may have before the request is considered a replay
+    private long maxSignatureAge;
 
-    private String secret;
+    // Tolerance (in seconds) allowed for a timestamp that is ahead of the gateway's clock
+    private long clockSkew;
 }

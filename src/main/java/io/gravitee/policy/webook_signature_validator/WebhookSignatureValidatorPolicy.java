@@ -32,6 +32,7 @@ import io.gravitee.policy.webhook_signature_validator.configuration.WebhookSigna
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
@@ -56,6 +57,9 @@ public class WebhookSignatureValidatorPolicy {
     private static final String WEBHOOK_SIGNATURE_NOT_FOUND = "WEBHOOK_SIGNATURE_NOT_FOUND";
     private static final String WEBHOOK_SIGNATURE_NOT_BASE64 = "WEBHOOK_SIGNATURE_NOT_BASE64";
     private static final String WEBHOOK_ADDITIONAL_HEADERS_NOT_VALID = "WEBHOOK_ADDITIONAL_HEADERS_NOT_VALID";
+    private static final String WEBHOOK_SIGNATURE_TIMESTAMP_NOT_FOUND = "WEBHOOK_SIGNATURE_TIMESTAMP_NOT_FOUND";
+    private static final String WEBHOOK_SIGNATURE_TIMESTAMP_INVALID = "WEBHOOK_SIGNATURE_TIMESTAMP_INVALID";
+    private static final String WEBHOOK_SIGNATURE_TIMESTAMP_EXPIRED = "WEBHOOK_SIGNATURE_TIMESTAMP_EXPIRED";
 
     /**
      * Policy configuration
@@ -163,6 +167,42 @@ public class WebhookSignatureValidatorPolicy {
                         i++;
                     }
                     data = tmpData + data;
+                }
+
+                // Optionally, verify the freshness of a signed timestamp header (replay protection)
+                if (configuration.getTimestampValidity().isEnabled()) {
+                    String sourceTimestampHeader = configuration.getTimestampValidity().getSourceTimestampHeader();
+                    String timestampValue = request.headers().get(sourceTimestampHeader);
+
+                    if (timestampValue == null || timestampValue.isBlank()) {
+                        chain.failWith(
+                            PolicyResult.failure(WEBHOOK_SIGNATURE_TIMESTAMP_NOT_FOUND, 401, "Webhook Signature Timestamp Not Found")
+                        );
+                        return;
+                    }
+
+                    long timestampSeconds;
+                    try {
+                        timestampSeconds = Long.parseLong(timestampValue.trim());
+                    } catch (NumberFormatException e) {
+                        chain.failWith(PolicyResult.failure(WEBHOOK_SIGNATURE_TIMESTAMP_INVALID, 401, "Webhook Signature Timestamp Invalid"));
+                        return;
+                    }
+
+                    long age = Instant.now().getEpochSecond() - timestampSeconds;
+                    log.debug(
+                        "Config> Timestamp age: {}s (maxSignatureAge={}s, clockSkew={}s)",
+                        age,
+                        configuration.getTimestampValidity().getMaxSignatureAge(),
+                        configuration.getTimestampValidity().getClockSkew()
+                    );
+
+                    if (age > configuration.getTimestampValidity().getMaxSignatureAge() || age < -configuration.getTimestampValidity().getClockSkew()) {
+                        chain.failWith(PolicyResult.failure(WEBHOOK_SIGNATURE_TIMESTAMP_EXPIRED, 401, "Webhook Signature Timestamp Expired"));
+                        return;
+                    }
+
+                    data = timestampValue + configuration.getTimestampValidity().getDelimiter() + data;
                 }
 
                 log.debug("Config> Configuration retrieval completed.");
