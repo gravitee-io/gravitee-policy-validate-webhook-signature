@@ -30,6 +30,12 @@
                         "enabled": {
                             "const": true
                         },
+                        "headersDelimiter": {
+                            "title": "Delimiter",
+                            "description": "Specify the delimiter used to separate each header and the body (must match the delimiter used to generate the signature)",
+                            "type": "string",
+                            "default": "."
+                        },
                         "headers": {
                             "type": "array",
                             "title": "HTTP Headers",
