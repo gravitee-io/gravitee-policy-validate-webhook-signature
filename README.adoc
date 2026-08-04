@@ -1,0 +1,124 @@
+= Webhook Signature Validator Policy
+
+ifdef::env-github[]
+image:https://img.shields.io/static/v1?label=Available%20at&message=Gravitee.io&color=1EC9D2["Gravitee.io", link="https://download.gravitee.io/#graviteeio-apim/plugins/policies/gravitee-policy-webhook-signature-validator/"]
+image:https://img.shields.io/badge/License-Apache%202.0-blue.svg["License", link="https://github.com/gravitee-io/gravitee-policy-webhook-signature-validator/blob/master/LICENSE.txt"]
+image:https://img.shields.io/badge/semantic--release-conventional%20commits-e10079?logo=semantic-release["Releases", link="https://github.com/gravitee-io/gravitee-policy-webhook-signature-validator/releases"]
+image:https://circleci.com/gh/gravitee-io/webhook-logo.svg?style=svg["CircleCI", link="https://circleci.com/gh/gravitee-io/gravitee-policy-webhook-signature-validator"]
+endif::[]
+
+== Phase
+
+[cols="2*", options="header"]
+|===
+^|onRequest
+^|onResponse
+
+^.^| X
+^.^| -
+
+|===
+
+== Description
+
+Webhook Signatures are a kind of authentication method which is adding a level of security.  It ensure the request has originated from the known source and has not been tampered with.
+
+The sender of the request generates their own HMAC signature (typically stored in a header of the request).  This policy will validate that signature by generating our own HMAC signature, and then comparing them.  If the signatures are a match, then the request is successfully validated.
+
+The "Signature" is based on the model that the sender must authenticate itself with a digital signature produced by a shared symmetric key (e.g., HMAC).  Also known as the shared "secret".
+
+
+== Configuration
+
+|===
+|Property |Required |Description |Default
+
+.^|sourceSignatureHeader
+^.^|X
+|Specify the location to find the Signature (typically from a HTTP header, and in Base64) (Supports EL)
+^.^| {#request.headers['X-HMAC-Signature'][0]}
+
+.^|schemeType
+^.^|X
+|By default, this policy will validate the signature only against the HTTP body.  Set this boolean to 'true' to include additional headers (as well as the HTTP body) in the signature validation.
+^.^| false
+
+.^|headers [List]
+^.^|-
+|If the signature has been generated with additional headers (e.g. a timestamp), you will need to include (a List of) the names of those additional header(s).
+^.^| 
+
+.^|secret
+^.^|X
+|The secret key used to generate and verify the signature (Supports EL).
+^.^| 
+
+.^|algorithms
+^.^|X
+|Specify the expected HMAC algorithm (e.g.: HmacSHA1, HmacSHA256, HmacSHA384, or HmacSHA512).
+^.^| HmacSHA256
+
+|===
+
+
+[source, json]
+.Webhook Signature Validator Policy example:
+----
+{
+  "policy": "webhook-signature-validator",
+  "configuration": {
+	"schemeType": {
+	  "headers": [
+		"X-Another-Header-1",
+		"x-Another-header-2"
+	  ],
+	  "enabled": true
+	},
+	"secret": "mySecret",
+	"sourceSignatureHeader": "{#request.headers['X-HMAC-Signature'][0]}",
+	"algorithm": "HmacSHA256"
+  }
+}
+----
+
+== Http Status Code
+
+|===
+|Code |Message
+
+.^| ```401```
+| In case of:
+
+* Missing or signature
+
+* Request does not contain headers part of the signature
+
+* Enforce HTTP headers not part of the signature
+|===
+
+== Errors
+
+If you're looking to override the default response provided by the policy, you can do it
+thanks to the response templates feature. These templates must be define at the API level (see `Response Templates`
+from the `Proxy` menu).
+
+Here are the error keys sent by this policy:
+
+[cols="2*", options="header"]
+|===
+^|Key
+^|Parameters
+
+.^|WEBHOOK_SIGNATURE_INVALID_SIGNATURE
+^.^|-
+
+.^|WEBHOOK_SIGNATURE_NOT_FOUND
+^.^|-
+
+.^|WEBHOOK_SIGNATURE_NOT_BASE64
+^.^|-
+
+.^|WEBHOOK_ADDITIONAL_HEADERS_NOT_VALID
+^.^|-
+
+|===
