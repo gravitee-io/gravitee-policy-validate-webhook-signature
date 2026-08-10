@@ -26,15 +26,17 @@ import lombok.Setter;
  */
 @Getter
 @Setter
-public class WebhookSignatureValidatorPolicyConfiguration implements PolicyConfiguration {
+public class WebhookSignatureValidatorPolicyConfiguration
+  implements PolicyConfiguration {
 
-    private String sourceSignatureHeader;
+  private String sourceSignatureHeader;
 
-    private SchemeTypeConfiguration schemeType = new SchemeTypeConfiguration();
+  private SchemeTypeConfiguration schemeType = new SchemeTypeConfiguration();
 
-    private TimestampValidityConfiguration timestampValidity = new TimestampValidityConfiguration();
+  private TimestampValidityConfiguration timestampValidity =
+    new TimestampValidityConfiguration();
 
-    private String algorithm;
+  private String algorithm;
 
-    private String secret;
+  private String secret;
 }

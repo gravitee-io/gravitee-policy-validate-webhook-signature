@@ -45,251 +45,320 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class WebhookSignatureValidatorPolicyTest {
 
-    private static final String SECRET_EXPR = "secretExpr";
-    private static final String SECRET = "mySecret";
-    private static final String SIGNATURE_HEADER_EXPR = "signatureHeaderExpr";
+  private static final String SECRET_EXPR = "secretExpr";
+  private static final String SECRET = "mySecret";
+  private static final String SIGNATURE_HEADER_EXPR = "signatureHeaderExpr";
 
-    @Mock
-    private Request request;
+  @Mock
+  private Request request;
 
-    @Mock
-    private Response response;
+  @Mock
+  private Response response;
 
-    @Mock
-    private PolicyChain chain;
+  @Mock
+  private PolicyChain chain;
 
-    @Mock
-    private ExecutionContext context;
+  @Mock
+  private ExecutionContext context;
 
-    @Mock
-    private TemplateEngine templateEngine;
+  @Mock
+  private TemplateEngine templateEngine;
 
-    @Mock
-    private HttpHeaders requestHeaders;
+  @Mock
+  private HttpHeaders requestHeaders;
 
-    private WebhookSignatureValidatorPolicyConfiguration configuration;
+  private WebhookSignatureValidatorPolicyConfiguration configuration;
 
-    @BeforeEach
-    void setUp() {
-        configuration = new WebhookSignatureValidatorPolicyConfiguration();
-        configuration.setSourceSignatureHeader(SIGNATURE_HEADER_EXPR);
-        configuration.setAlgorithm("HmacSHA256");
-        configuration.setSecret(SECRET_EXPR);
+  @BeforeEach
+  void setUp() {
+    configuration = new WebhookSignatureValidatorPolicyConfiguration();
+    configuration.setSourceSignatureHeader(SIGNATURE_HEADER_EXPR);
+    configuration.setAlgorithm("HmacSHA256");
+    configuration.setSecret(SECRET_EXPR);
 
-        when(context.getTemplateEngine()).thenReturn(templateEngine);
-        when(templateEngine.getValue(SECRET_EXPR, String.class)).thenReturn(SECRET);
+    when(context.getTemplateEngine()).thenReturn(templateEngine);
+    when(templateEngine.getValue(SECRET_EXPR, String.class)).thenReturn(SECRET);
+  }
+
+  private void run(String body, String signatureHeaderValue) {
+    when(templateEngine.getValue(SIGNATURE_HEADER_EXPR, String.class))
+      .thenReturn(signatureHeaderValue);
+
+    ReadWriteStream<Buffer> stream = new WebhookSignatureValidatorPolicy(
+      configuration
+    )
+      .onRequestContent(request, response, context, chain);
+    stream.write(Buffer.buffer(body));
+    stream.end();
+  }
+
+  private static String hmac(String data, String secret, String algorithm) {
+    try {
+      Mac mac = Mac.getInstance(algorithm);
+      mac.init(new SecretKeySpec(secret.getBytes("UTF-8"), algorithm));
+      return java.util.Base64
+        .getEncoder()
+        .encodeToString(mac.doFinal(data.getBytes("UTF-8")));
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
+  }
 
-    private void run(String body, String signatureHeaderValue) {
-        when(templateEngine.getValue(SIGNATURE_HEADER_EXPR, String.class)).thenReturn(signatureHeaderValue);
+  @Test
+  void shouldFailWhenSignatureHeaderMissing() {
+    run("{\"event\":\"test\"}", null);
 
-        ReadWriteStream<Buffer> stream = new WebhookSignatureValidatorPolicy(configuration).onRequestContent(request, response, context, chain);
-        stream.write(Buffer.buffer(body));
-        stream.end();
-    }
+    verify(chain, never()).doNext(request, response);
+    verify(chain)
+      .failWith(
+        argThat(result ->
+          result.statusCode() == 401 &&
+          result.key().equals("WEBHOOK_SIGNATURE_NOT_FOUND")
+        )
+      );
+  }
 
-    private static String hmac(String data, String secret, String algorithm) {
-        try {
-            Mac mac = Mac.getInstance(algorithm);
-            mac.init(new SecretKeySpec(secret.getBytes("UTF-8"), algorithm));
-            return java.util.Base64.getEncoder().encodeToString(mac.doFinal(data.getBytes("UTF-8")));
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
+  @Test
+  void shouldFailWhenSignatureHeaderBlank() {
+    run("{\"event\":\"test\"}", "   ");
 
-    @Test
-    void shouldFailWhenSignatureHeaderMissing() {
-        run("{\"event\":\"test\"}", null);
+    verify(chain, never()).doNext(request, response);
+    verify(chain)
+      .failWith(
+        argThat(result ->
+          result.statusCode() == 401 &&
+          result.key().equals("WEBHOOK_SIGNATURE_NOT_FOUND")
+        )
+      );
+  }
 
-        verify(chain, never()).doNext(request, response);
-        verify(chain).failWith(argThat(result -> result.statusCode() == 401 && result.key().equals("WEBHOOK_SIGNATURE_NOT_FOUND")));
-    }
+  @Test
+  void shouldValidateCorrectSignature() {
+    String body = "{\"event\":\"test\"}";
+    run(body, hmac(body, SECRET, "HmacSHA256"));
 
-    @Test
-    void shouldFailWhenSignatureHeaderBlank() {
-        run("{\"event\":\"test\"}", "   ");
+    verify(chain).doNext(request, response);
+    verify(chain, never()).failWith(any(PolicyResult.class));
+  }
 
-        verify(chain, never()).doNext(request, response);
-        verify(chain).failWith(argThat(result -> result.statusCode() == 401 && result.key().equals("WEBHOOK_SIGNATURE_NOT_FOUND")));
-    }
+  @Test
+  void shouldFailWhenSignatureIncorrect() {
+    run("{\"event\":\"test\"}", "not-the-right-signature");
 
-    @Test
-    void shouldValidateCorrectSignature() {
-        String body = "{\"event\":\"test\"}";
-        run(body, hmac(body, SECRET, "HmacSHA256"));
+    verify(chain, never()).doNext(request, response);
+    verify(chain)
+      .failWith(
+        argThat(result ->
+          result.statusCode() == 401 &&
+          result.key().equals("WEBHOOK_SIGNATURE_INVALID_SIGNATURE")
+        )
+      );
+  }
 
-        verify(chain).doNext(request, response);
-        verify(chain, never()).failWith(any(PolicyResult.class));
-    }
+  @Test
+  void shouldValidateWithAdditionalHeadersAndDelimiter() {
+    SchemeTypeConfiguration schemeType = new SchemeTypeConfiguration();
+    schemeType.setEnabled(true);
+    schemeType.setHeaders(List.of("X-Header-1", "X-Header-2"));
+    schemeType.setHeadersDelimiter(".");
+    configuration.setSchemeType(schemeType);
 
-    @Test
-    void shouldFailWhenSignatureIncorrect() {
-        run("{\"event\":\"test\"}", "not-the-right-signature");
+    when(request.headers()).thenReturn(requestHeaders);
+    when(requestHeaders.get("X-Header-1")).thenReturn("value1");
+    when(requestHeaders.get("X-Header-2")).thenReturn("value2");
 
-        verify(chain, never()).doNext(request, response);
-        verify(chain).failWith(argThat(result -> result.statusCode() == 401 && result.key().equals("WEBHOOK_SIGNATURE_INVALID_SIGNATURE")));
-    }
+    String body = "{\"event\":\"test\"}";
+    String signedContent = "value1.value2." + body;
+    run(body, hmac(signedContent, SECRET, "HmacSHA256"));
 
-    @Test
-    void shouldValidateWithAdditionalHeadersAndDelimiter() {
-        SchemeTypeConfiguration schemeType = new SchemeTypeConfiguration();
-        schemeType.setEnabled(true);
-        schemeType.setHeaders(List.of("X-Header-1", "X-Header-2"));
-        schemeType.setHeadersDelimiter(".");
-        configuration.setSchemeType(schemeType);
+    verify(chain).doNext(request, response);
+    verify(chain, never()).failWith(any(PolicyResult.class));
+  }
 
-        when(request.headers()).thenReturn(requestHeaders);
-        when(requestHeaders.get("X-Header-1")).thenReturn("value1");
-        when(requestHeaders.get("X-Header-2")).thenReturn("value2");
+  @Test
+  void shouldFailWhenAdditionalHeaderMissing() {
+    SchemeTypeConfiguration schemeType = new SchemeTypeConfiguration();
+    schemeType.setEnabled(true);
+    schemeType.setHeaders(List.of("X-Header-1"));
+    schemeType.setHeadersDelimiter(".");
+    configuration.setSchemeType(schemeType);
 
-        String body = "{\"event\":\"test\"}";
-        String signedContent = "value1.value2." + body;
-        run(body, hmac(signedContent, SECRET, "HmacSHA256"));
+    when(request.headers()).thenReturn(requestHeaders);
+    when(requestHeaders.get("X-Header-1")).thenReturn(null);
 
-        verify(chain).doNext(request, response);
-        verify(chain, never()).failWith(any(PolicyResult.class));
-    }
+    run("{\"event\":\"test\"}", "irrelevant-signature");
 
-    @Test
-    void shouldFailWhenAdditionalHeaderMissing() {
-        SchemeTypeConfiguration schemeType = new SchemeTypeConfiguration();
-        schemeType.setEnabled(true);
-        schemeType.setHeaders(List.of("X-Header-1"));
-        schemeType.setHeadersDelimiter(".");
-        configuration.setSchemeType(schemeType);
+    verify(chain, never()).doNext(request, response);
+    verify(chain)
+      .failWith(
+        argThat(result ->
+          result.statusCode() == 401 &&
+          result.key().equals("WEBHOOK_ADDITIONAL_HEADERS_NOT_VALID")
+        )
+      );
+  }
 
-        when(request.headers()).thenReturn(requestHeaders);
-        when(requestHeaders.get("X-Header-1")).thenReturn(null);
+  @Test
+  void shouldFailWhenAdditionalHeadersEnabledButNoneConfigured() {
+    SchemeTypeConfiguration schemeType = new SchemeTypeConfiguration();
+    schemeType.setEnabled(true);
+    schemeType.setHeaders(List.of());
+    configuration.setSchemeType(schemeType);
 
-        run("{\"event\":\"test\"}", "irrelevant-signature");
+    run("{\"event\":\"test\"}", "irrelevant-signature");
 
-        verify(chain, never()).doNext(request, response);
-        verify(chain).failWith(argThat(result -> result.statusCode() == 401 && result.key().equals("WEBHOOK_ADDITIONAL_HEADERS_NOT_VALID")));
-    }
+    verify(chain, never()).doNext(request, response);
+    verify(chain)
+      .failWith(
+        argThat(result ->
+          result.statusCode() == 401 &&
+          result.key().equals("WEBHOOK_ADDITIONAL_HEADERS_NOT_VALID")
+        )
+      );
+  }
 
-    @Test
-    void shouldFailWhenAdditionalHeadersEnabledButNoneConfigured() {
-        SchemeTypeConfiguration schemeType = new SchemeTypeConfiguration();
-        schemeType.setEnabled(true);
-        schemeType.setHeaders(List.of());
-        configuration.setSchemeType(schemeType);
+  @Test
+  void shouldValidateWithFreshTimestamp() {
+    TimestampValidityConfiguration timestampValidity =
+      new TimestampValidityConfiguration();
+    timestampValidity.setEnabled(true);
+    timestampValidity.setSourceTimestampHeader("X-HMAC-Timestamp");
+    timestampValidity.setDelimiter(".");
+    timestampValidity.setMaxSignatureAge(300);
+    timestampValidity.setClockSkew(60);
+    configuration.setTimestampValidity(timestampValidity);
 
-        run("{\"event\":\"test\"}", "irrelevant-signature");
+    String timestamp = String.valueOf(Instant.now().getEpochSecond());
+    when(request.headers()).thenReturn(requestHeaders);
+    when(requestHeaders.get("X-HMAC-Timestamp")).thenReturn(timestamp);
 
-        verify(chain, never()).doNext(request, response);
-        verify(chain).failWith(argThat(result -> result.statusCode() == 401 && result.key().equals("WEBHOOK_ADDITIONAL_HEADERS_NOT_VALID")));
-    }
+    String body = "{\"event\":\"test\"}";
+    String signedContent = timestamp + "." + body;
+    run(body, hmac(signedContent, SECRET, "HmacSHA256"));
 
-    @Test
-    void shouldValidateWithFreshTimestamp() {
-        TimestampValidityConfiguration timestampValidity = new TimestampValidityConfiguration();
-        timestampValidity.setEnabled(true);
-        timestampValidity.setSourceTimestampHeader("X-HMAC-Timestamp");
-        timestampValidity.setDelimiter(".");
-        timestampValidity.setMaxSignatureAge(300);
-        timestampValidity.setClockSkew(60);
-        configuration.setTimestampValidity(timestampValidity);
+    verify(chain).doNext(request, response);
+    verify(chain, never()).failWith(any(PolicyResult.class));
+  }
 
-        String timestamp = String.valueOf(Instant.now().getEpochSecond());
-        when(request.headers()).thenReturn(requestHeaders);
-        when(requestHeaders.get("X-HMAC-Timestamp")).thenReturn(timestamp);
+  @Test
+  void shouldFailWhenTimestampMissing() {
+    TimestampValidityConfiguration timestampValidity =
+      new TimestampValidityConfiguration();
+    timestampValidity.setEnabled(true);
+    timestampValidity.setSourceTimestampHeader("X-HMAC-Timestamp");
+    timestampValidity.setDelimiter(".");
+    configuration.setTimestampValidity(timestampValidity);
 
-        String body = "{\"event\":\"test\"}";
-        String signedContent = timestamp + "." + body;
-        run(body, hmac(signedContent, SECRET, "HmacSHA256"));
+    when(request.headers()).thenReturn(requestHeaders);
+    when(requestHeaders.get("X-HMAC-Timestamp")).thenReturn(null);
 
-        verify(chain).doNext(request, response);
-        verify(chain, never()).failWith(any(PolicyResult.class));
-    }
+    run("{\"event\":\"test\"}", "irrelevant-signature");
 
-    @Test
-    void shouldFailWhenTimestampMissing() {
-        TimestampValidityConfiguration timestampValidity = new TimestampValidityConfiguration();
-        timestampValidity.setEnabled(true);
-        timestampValidity.setSourceTimestampHeader("X-HMAC-Timestamp");
-        timestampValidity.setDelimiter(".");
-        configuration.setTimestampValidity(timestampValidity);
+    verify(chain, never()).doNext(request, response);
+    verify(chain)
+      .failWith(
+        argThat(result ->
+          result.statusCode() == 401 &&
+          result.key().equals("WEBHOOK_SIGNATURE_TIMESTAMP_NOT_FOUND")
+        )
+      );
+  }
 
-        when(request.headers()).thenReturn(requestHeaders);
-        when(requestHeaders.get("X-HMAC-Timestamp")).thenReturn(null);
+  @Test
+  void shouldFailWhenTimestampMalformed() {
+    TimestampValidityConfiguration timestampValidity =
+      new TimestampValidityConfiguration();
+    timestampValidity.setEnabled(true);
+    timestampValidity.setSourceTimestampHeader("X-HMAC-Timestamp");
+    timestampValidity.setDelimiter(".");
+    configuration.setTimestampValidity(timestampValidity);
 
-        run("{\"event\":\"test\"}", "irrelevant-signature");
+    when(request.headers()).thenReturn(requestHeaders);
+    when(requestHeaders.get("X-HMAC-Timestamp")).thenReturn("not-a-number");
 
-        verify(chain, never()).doNext(request, response);
-        verify(chain).failWith(argThat(result -> result.statusCode() == 401 && result.key().equals("WEBHOOK_SIGNATURE_TIMESTAMP_NOT_FOUND")));
-    }
+    run("{\"event\":\"test\"}", "irrelevant-signature");
 
-    @Test
-    void shouldFailWhenTimestampMalformed() {
-        TimestampValidityConfiguration timestampValidity = new TimestampValidityConfiguration();
-        timestampValidity.setEnabled(true);
-        timestampValidity.setSourceTimestampHeader("X-HMAC-Timestamp");
-        timestampValidity.setDelimiter(".");
-        configuration.setTimestampValidity(timestampValidity);
+    verify(chain, never()).doNext(request, response);
+    verify(chain)
+      .failWith(
+        argThat(result ->
+          result.statusCode() == 401 &&
+          result.key().equals("WEBHOOK_SIGNATURE_TIMESTAMP_INVALID")
+        )
+      );
+  }
 
-        when(request.headers()).thenReturn(requestHeaders);
-        when(requestHeaders.get("X-HMAC-Timestamp")).thenReturn("not-a-number");
+  @Test
+  void shouldFailWhenTimestampTooOld() {
+    TimestampValidityConfiguration timestampValidity =
+      new TimestampValidityConfiguration();
+    timestampValidity.setEnabled(true);
+    timestampValidity.setSourceTimestampHeader("X-HMAC-Timestamp");
+    timestampValidity.setDelimiter(".");
+    timestampValidity.setMaxSignatureAge(300);
+    timestampValidity.setClockSkew(60);
+    configuration.setTimestampValidity(timestampValidity);
 
-        run("{\"event\":\"test\"}", "irrelevant-signature");
+    String staleTimestamp = String.valueOf(
+      Instant.now().getEpochSecond() - 1000
+    );
+    when(request.headers()).thenReturn(requestHeaders);
+    when(requestHeaders.get("X-HMAC-Timestamp")).thenReturn(staleTimestamp);
 
-        verify(chain, never()).doNext(request, response);
-        verify(chain).failWith(argThat(result -> result.statusCode() == 401 && result.key().equals("WEBHOOK_SIGNATURE_TIMESTAMP_INVALID")));
-    }
+    String body = "{\"event\":\"test\"}";
+    String signedContent = staleTimestamp + "." + body;
+    // Even with a correctly computed signature, a stale timestamp must still be rejected.
+    run(body, hmac(signedContent, SECRET, "HmacSHA256"));
 
-    @Test
-    void shouldFailWhenTimestampTooOld() {
-        TimestampValidityConfiguration timestampValidity = new TimestampValidityConfiguration();
-        timestampValidity.setEnabled(true);
-        timestampValidity.setSourceTimestampHeader("X-HMAC-Timestamp");
-        timestampValidity.setDelimiter(".");
-        timestampValidity.setMaxSignatureAge(300);
-        timestampValidity.setClockSkew(60);
-        configuration.setTimestampValidity(timestampValidity);
+    verify(chain, never()).doNext(request, response);
+    verify(chain)
+      .failWith(
+        argThat(result ->
+          result.statusCode() == 401 &&
+          result.key().equals("WEBHOOK_SIGNATURE_TIMESTAMP_EXPIRED")
+        )
+      );
+  }
 
-        String staleTimestamp = String.valueOf(Instant.now().getEpochSecond() - 1000);
-        when(request.headers()).thenReturn(requestHeaders);
-        when(requestHeaders.get("X-HMAC-Timestamp")).thenReturn(staleTimestamp);
+  @Test
+  void shouldFailWhenTimestampTooFarInFuture() {
+    TimestampValidityConfiguration timestampValidity =
+      new TimestampValidityConfiguration();
+    timestampValidity.setEnabled(true);
+    timestampValidity.setSourceTimestampHeader("X-HMAC-Timestamp");
+    timestampValidity.setDelimiter(".");
+    timestampValidity.setMaxSignatureAge(300);
+    timestampValidity.setClockSkew(60);
+    configuration.setTimestampValidity(timestampValidity);
 
-        String body = "{\"event\":\"test\"}";
-        String signedContent = staleTimestamp + "." + body;
-        // Even with a correctly computed signature, a stale timestamp must still be rejected.
-        run(body, hmac(signedContent, SECRET, "HmacSHA256"));
+    String futureTimestamp = String.valueOf(
+      Instant.now().getEpochSecond() + 1000
+    );
+    when(request.headers()).thenReturn(requestHeaders);
+    when(requestHeaders.get("X-HMAC-Timestamp")).thenReturn(futureTimestamp);
 
-        verify(chain, never()).doNext(request, response);
-        verify(chain).failWith(argThat(result -> result.statusCode() == 401 && result.key().equals("WEBHOOK_SIGNATURE_TIMESTAMP_EXPIRED")));
-    }
+    String body = "{\"event\":\"test\"}";
+    String signedContent = futureTimestamp + "." + body;
+    run(body, hmac(signedContent, SECRET, "HmacSHA256"));
 
-    @Test
-    void shouldFailWhenTimestampTooFarInFuture() {
-        TimestampValidityConfiguration timestampValidity = new TimestampValidityConfiguration();
-        timestampValidity.setEnabled(true);
-        timestampValidity.setSourceTimestampHeader("X-HMAC-Timestamp");
-        timestampValidity.setDelimiter(".");
-        timestampValidity.setMaxSignatureAge(300);
-        timestampValidity.setClockSkew(60);
-        configuration.setTimestampValidity(timestampValidity);
+    verify(chain, never()).doNext(request, response);
+    verify(chain)
+      .failWith(
+        argThat(result ->
+          result.statusCode() == 401 &&
+          result.key().equals("WEBHOOK_SIGNATURE_TIMESTAMP_EXPIRED")
+        )
+      );
+  }
 
-        String futureTimestamp = String.valueOf(Instant.now().getEpochSecond() + 1000);
-        when(request.headers()).thenReturn(requestHeaders);
-        when(requestHeaders.get("X-HMAC-Timestamp")).thenReturn(futureTimestamp);
+  @Test
+  void shouldUseDifferentAlgorithms() {
+    configuration.setAlgorithm("HmacSHA512");
 
-        String body = "{\"event\":\"test\"}";
-        String signedContent = futureTimestamp + "." + body;
-        run(body, hmac(signedContent, SECRET, "HmacSHA256"));
+    String body = "{\"event\":\"test\"}";
+    run(body, hmac(body, SECRET, "HmacSHA512"));
 
-        verify(chain, never()).doNext(request, response);
-        verify(chain).failWith(argThat(result -> result.statusCode() == 401 && result.key().equals("WEBHOOK_SIGNATURE_TIMESTAMP_EXPIRED")));
-    }
-
-    @Test
-    void shouldUseDifferentAlgorithms() {
-        configuration.setAlgorithm("HmacSHA512");
-
-        String body = "{\"event\":\"test\"}";
-        run(body, hmac(body, SECRET, "HmacSHA512"));
-
-        verify(chain).doNext(request, response);
-        verify(chain, never()).failWith(any(PolicyResult.class));
-    }
+    verify(chain).doNext(request, response);
+    verify(chain, never()).failWith(any(PolicyResult.class));
+  }
 }

@@ -26,18 +26,18 @@ import lombok.Setter;
 @Setter
 public class TimestampValidityConfiguration {
 
-    // Optional - When enabled, this policy requires a timestamp (epoch seconds) header, includes it in the
-    // recomputed HMAC, and rejects the request if the timestamp is missing, malformed, or outside the allowed age/skew
-    private boolean enabled;
+  // Optional - When enabled, this policy requires a timestamp (epoch seconds) header, includes it in the
+  // recomputed HMAC, and rejects the request if the timestamp is missing, malformed, or outside the allowed age/skew
+  private boolean enabled;
 
-    private String sourceTimestampHeader;
+  private String sourceTimestampHeader;
 
-    // Delimiter placed between the timestamp header value and the rest of the signed content
-    private String delimiter;
+  // Delimiter placed between the timestamp header value and the rest of the signed content
+  private String delimiter;
 
-    // Maximum age (in seconds) a timestamp may have before the request is considered a replay
-    private long maxSignatureAge;
+  // Maximum age (in seconds) a timestamp may have before the request is considered a replay
+  private long maxSignatureAge;
 
-    // Tolerance (in seconds) allowed for a timestamp that is ahead of the gateway's clock
-    private long clockSkew;
+  // Tolerance (in seconds) allowed for a timestamp that is ahead of the gateway's clock
+  private long clockSkew;
 }
