@@ -78,7 +78,7 @@ public class WebhookSignatureValidatorPolicy {
     ExecutionContext context,
     PolicyChain chain
   ) {
-    log.info("Executing WebhookSignatureValidatorPolicy...");
+    log.debug("Executing WebhookSignatureValidatorPolicy...");
 
     String secret = context
       .getTemplateEngine()
@@ -175,9 +175,7 @@ public class WebhookSignatureValidatorPolicy {
           }
         }
 
-        log.debug("Config> Secret: {}", secret);
         log.debug("Config> Algorithm: {}", algorithm);
-        log.debug("Config> Request Body: {}", buffer.toString());
 
         // Optionally, prefix any additional headers to HTTP body
         if (configuration.getSchemeType().isEnabled()) {
