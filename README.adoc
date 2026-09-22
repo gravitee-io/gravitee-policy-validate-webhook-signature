@@ -170,4 +170,7 @@ Here are the error keys sent by this policy:
 .^|WEBHOOK_SIGNATURE_TIMESTAMP_IN_FUTURE
 ^.^|-
 
+.^|WEBHOOK_SIGNATURE_GENERATION_FAILED
+^.^|-
+
 |===
