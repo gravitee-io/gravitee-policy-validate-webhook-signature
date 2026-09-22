@@ -1,61 +1,61 @@
 {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "additionalProperties": false,
-    "properties": {
-        "sourceSignatureHeader": {
-            "title": "Signature",
-            "description": "Specify the location to find the Signature (typically from a HTTP header, and in Base64) (Supports EL)",
-            "type": "string",
-            "default": "{#request.headers['X-HMAC-Signature'][0]}"
-        },
-        "schemeType": {
-            "title": "Validation Type",
-            "description": "By default, this policy will validate the signature only against the HTTP body.  Change this option if you need to include additional headers (as well as the HTTP body) in the signature validation.",
-            "type": "object",
-            "oneOf": [
-                {
-                    "title": "HTTP Body (only)",
-                    "description": "By default, this policy will validate the signature only against the HTTP body.",
-                    "properties": {
-                        "enabled": {
-                            "const": false
-                        }
-                    }
-                },
-                {
-                    "title": "HTTP Body + Header(s)",
-                    "description": "Validate the signature using both the HTTP body, pre-fixed with additional header(s)",
-                    "properties": {
-                        "enabled": {
-                            "const": true
-                        },
-                        "headers": {
-                            "type": "array",
-                            "title": "HTTP Headers",
-                            "description": "List of headers to use in Webhook signature validation",
-                            "items": {
-                                "title": "HTTP Header Name",
-                                "type": "string",
-                                "default": "X-MyHeaderName"
-                            }
-                        }
-                    }
-                }
-            ]
-        },
-        "secret": {
-            "title": "Secret",
-            "description": "The secret key used to sign (supports EL)",
-            "type": "string"
-        },
-        "algorithm": {
-            "title": "HMAC Algorithm Type",
-            "description": "Specify the expected HMAC algorithm",
-            "type": "string",
-            "default": "HmacSHA256",
-            "enum": ["HmacSHA1", "HmacSHA256", "HmacSHA384", "HmacSHA512"]
-        }
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "sourceSignatureHeader": {
+      "title": "Signature",
+      "description": "Specify the location to find the Signature (typically from a HTTP header, and in Base64) (Supports EL)",
+      "type": "string",
+      "default": "{#request.headers['X-HMAC-Signature'][0]}"
     },
-    "required": ["schemeType", "secret", "algorithm"]
+    "schemeType": {
+      "title": "Validation Type",
+      "description": "By default, this policy will validate the signature only against the HTTP body.  Change this option if you need to include additional headers (as well as the HTTP body) in the signature validation.",
+      "type": "object",
+      "oneOf": [
+        {
+          "title": "HTTP Body (only)",
+          "description": "By default, this policy will validate the signature only against the HTTP body.",
+          "properties": {
+            "enabled": {
+              "const": false
+            }
+          }
+        },
+        {
+          "title": "HTTP Body + Header(s)",
+          "description": "Validate the signature using both the HTTP body, pre-fixed with additional header(s)",
+          "properties": {
+            "enabled": {
+              "const": true
+            },
+            "headers": {
+              "type": "array",
+              "title": "HTTP Headers",
+              "description": "List of headers to use in Webhook signature validation",
+              "items": {
+                "title": "HTTP Header Name",
+                "type": "string",
+                "default": "X-MyHeaderName"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "secret": {
+      "title": "Secret",
+      "description": "The secret key used to sign (supports EL)",
+      "type": "string"
+    },
+    "algorithm": {
+      "title": "HMAC Algorithm Type",
+      "description": "Specify the expected HMAC algorithm",
+      "type": "string",
+      "default": "HmacSHA256",
+      "enum": ["HmacSHA1", "HmacSHA256", "HmacSHA384", "HmacSHA512"]
+    }
+  },
+  "required": ["schemeType", "secret", "algorithm"]
 }

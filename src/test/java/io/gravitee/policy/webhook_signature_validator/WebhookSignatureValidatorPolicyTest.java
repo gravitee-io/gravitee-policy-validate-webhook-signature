@@ -59,55 +59,68 @@ import org.tomitribe.auth.signatures.Signer;
 @RunWith(MockitoJUnitRunner.class)
 public class WebhookSignatureValidatorPolicyTest {
 
-    @Mock
-    private Request request;
+  @Mock
+  private Request request;
 
-    @Mock
-    private Response response;
+  @Mock
+  private Response response;
 
-    @Mock
-    private PolicyChain chain;
+  @Mock
+  private PolicyChain chain;
 
-    @Mock
-    private HttpHeaders httpHeaders;
+  @Mock
+  private HttpHeaders httpHeaders;
 
-    @Mock
-    private ExecutionContext context;
+  @Mock
+  private ExecutionContext context;
 
-    @Mock
-    private WebhookSignatureValidatorPolicyConfiguration configuration;
+  @Mock
+  private WebhookSignatureValidatorPolicyConfiguration configuration;
 
-    @Before
-    public void init() {
-        when(context.getTemplateEngine()).thenReturn(new SpelTemplateEngineFactory().templateEngine());
-    }
+  @Before
+  public void init() {
+    when(context.getTemplateEngine()).thenReturn(
+      new SpelTemplateEngineFactory().templateEngine()
+    );
+  }
 
-    @Test
-    public void shouldContinueRequestStreaming_templateHeaders() {
-        HttpHeaders headers = HttpHeaders.create().set("my-header", "header-value");
+  @Test
+  public void shouldContinueRequestStreaming_templateHeaders() {
+    HttpHeaders headers = HttpHeaders.create().set("my-header", "header-value");
 
-        when(request.headers()).thenReturn(headers);
+    when(request.headers()).thenReturn(headers);
 
-        when(configuration.getBody()).thenReturn("{'myKey':'myValue'}");
-        when(configuration.getScope()).thenReturn(PolicyScope.REQUEST_CONTENT);
+    when(configuration.getBody()).thenReturn("{'myKey':'myValue'}");
+    when(configuration.getScope()).thenReturn(PolicyScope.REQUEST_CONTENT);
 
-        Buffer buffer = factory.buffer("{\"name\":1}");
-        ReadWriteStream<Buffer> stream = new AssignContentPolicyV3(configuration).onRequestContent(request, context, chain);
-        stream.bodyHandler(buffer1 -> assertThat(buffer1.toString()).isEqualTo("header-value"));
+    Buffer buffer = factory.buffer("{\"name\":1}");
+    ReadWriteStream<Buffer> stream = new AssignContentPolicyV3(
+      configuration
+    ).onRequestContent(request, context, chain);
+    stream.bodyHandler(buffer1 ->
+      assertThat(buffer1.toString()).isEqualTo("header-value")
+    );
 
-        stream.end(buffer);
+    stream.end(buffer);
 
-        verify(chain, times(1)).streamFailWith(any(PolicyResult.class));
-    }
+    verify(chain, times(1)).streamFailWith(any(PolicyResult.class));
+  }
 
-    @Test
-    public void shouldNotContinueRequestProcessing_noSignature() {
-        new WebhookSignatureValidatorPolicy(configuration).onRequestContent(request, response, context, chain);
+  @Test
+  public void shouldNotContinueRequestProcessing_noSignature() {
+    new WebhookSignatureValidatorPolicy(configuration).onRequestContent(
+      request,
+      response,
+      context,
+      chain
+    );
 
-        verify(chain, never()).doNext(request, response);
-        verify(chain, times(1)).failWith(argThat(result -> result.statusCode() == HttpStatusCode.UNAUTHORIZED_401));
-    }
-    /*
+    verify(chain, never()).doNext(request, response);
+    verify(chain, times(1)).failWith(
+      argThat(result -> result.statusCode() == HttpStatusCode.UNAUTHORIZED_401)
+    );
+  }
+  /*
     @Test
     public void shouldNotContinueRequestProcessing_noSignature_signatureScheme() {
         when(configuration.getScheme()).thenReturn(HttpSignatureScheme.SIGNATURE);
@@ -122,7 +135,7 @@ public class WebhookSignatureValidatorPolicyTest {
     }
     */
 
-    /*
+  /*
     @Test
     public void shouldNotContinueRequestProcessing_noSignature_customHeaderScheme() {
         when(configuration.getScheme()).thenReturn(HttpSignatureScheme.CUSTOM_HEADER);
@@ -137,7 +150,7 @@ public class WebhookSignatureValidatorPolicyTest {
     }
 	*/
 
-    /*
+  /*
     @Test
     public void test() throws IOException {
         final String s =
@@ -170,7 +183,7 @@ public class WebhookSignatureValidatorPolicyTest {
     }
 	*/
 
-    /*
+  /*
     @Test
     public void shouldNotContinueRequestProcessing_enforceAlgorithm_unexpectedAlgorithm() throws IOException {
         when(configuration.getScheme()).thenReturn(HttpSignatureScheme.SIGNATURE);
@@ -228,7 +241,7 @@ public class WebhookSignatureValidatorPolicyTest {
     }
 	*/
 
-    /*
+  /*
     @Test
     public void shouldContinueRequestProcessing_noAlgorithmEnforced() throws IOException {
         when(configuration.getScheme()).thenReturn(HttpSignatureScheme.SIGNATURE);
@@ -383,7 +396,7 @@ public class WebhookSignatureValidatorPolicyTest {
     }
 	*/
 
-    /*
+  /*
     @Test
     public void shouldContinueRequestProcessing_withClockSkew() throws IOException {
         when(configuration.getScheme()).thenReturn(HttpSignatureScheme.SIGNATURE);
@@ -452,5 +465,4 @@ public class WebhookSignatureValidatorPolicyTest {
         verify(chain, times(1)).failWith(argThat(result -> result.statusCode() == HttpStatusCode.UNAUTHORIZED_401));
     }
 	*/
-
 }
