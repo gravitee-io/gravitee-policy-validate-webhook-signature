@@ -85,6 +85,7 @@ public class WebhookSignatureValidatorPolicy {
       public void end() {
         String sourceSigHeader = null;
         List<String> addedHeaders = null;
+        String headersDelimiter = null;
 
         // Get HTTP body payload
         String data = buffer.toString();
@@ -123,6 +124,11 @@ public class WebhookSignatureValidatorPolicy {
           addedHeaders = new ArrayList<>(
             configuration.getSchemeType().getHeaders()
           );
+
+          headersDelimiter = configuration
+            .getSchemeType()
+            .getHeadersDelimiter();
+          log.debug("Config> headersDelimiter: {}", headersDelimiter);
 
           if (addedHeaders.size() > 0) {
             int i = 0;
@@ -170,7 +176,8 @@ public class WebhookSignatureValidatorPolicy {
               addedHeaders.get(i),
               request.headers().get(addedHeaders.get(i))
             );
-            tmpData += request.headers().get(addedHeaders.get(i));
+            tmpData +=
+              request.headers().get(addedHeaders.get(i)) + headersDelimiter;
             i++;
           }
           data = tmpData + data;
