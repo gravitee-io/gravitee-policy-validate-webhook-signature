@@ -94,11 +94,7 @@ public class WebhookSignatureValidatorPolicy {
             .getTemplateEngine()
             .getValue(configuration.getSourceSignatureHeader(), String.class);
           log.debug("Supplied HMAC Signature: {}", sourceSigHeader);
-          if (
-            sourceSigHeader == "" ||
-            sourceSigHeader.isBlank() ||
-            sourceSigHeader == null
-          ) {
+          if (sourceSigHeader == null || sourceSigHeader.isBlank()) {
             chain.failWith(
               PolicyResult.failure(
                 WEBHOOK_SIGNATURE_NOT_FOUND,
