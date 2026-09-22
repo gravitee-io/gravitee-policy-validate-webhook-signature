@@ -77,7 +77,9 @@ class WebhookSignatureValidatorPolicyTest {
     configuration.setSecret(SECRET_EXPR);
 
     when(context.getTemplateEngine()).thenReturn(templateEngine);
-    when(templateEngine.getValue(SECRET_EXPR, String.class)).thenReturn(SECRET);
+    lenient()
+      .when(templateEngine.getValue(SECRET_EXPR, String.class))
+      .thenReturn(SECRET);
   }
 
   private void run(String body, String signatureHeaderValue) {
@@ -151,6 +153,24 @@ class WebhookSignatureValidatorPolicyTest {
         argThat(result ->
           result.statusCode() == 401 &&
           result.key().equals("WEBHOOK_SIGNATURE_INVALID_SIGNATURE")
+        )
+      );
+  }
+
+  @Test
+  void shouldFailWithDistinctKeyWhenSecretCannotBeResolved() {
+    // The secret expression resolves to null (e.g. missing dictionary entry or
+    // undefined API property), so the HMAC cannot be computed at all.
+    when(templateEngine.getValue(SECRET_EXPR, String.class)).thenReturn(null);
+
+    run("{\"event\":\"test\"}", "irrelevant-signature");
+
+    verify(chain, never()).doNext(request, response);
+    verify(chain)
+      .failWith(
+        argThat(result ->
+          result.statusCode() == 401 &&
+          result.key().equals("WEBHOOK_SIGNATURE_GENERATION_FAILED")
         )
       );
   }
@@ -346,7 +366,7 @@ class WebhookSignatureValidatorPolicyTest {
       .failWith(
         argThat(result ->
           result.statusCode() == 401 &&
-          result.key().equals("WEBHOOK_SIGNATURE_TIMESTAMP_EXPIRED")
+          result.key().equals("WEBHOOK_SIGNATURE_TIMESTAMP_IN_FUTURE")
         )
       );
   }

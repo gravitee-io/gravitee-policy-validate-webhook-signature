@@ -26,6 +26,8 @@ import io.gravitee.policy.api.PolicyChain;
 import io.gravitee.policy.api.PolicyResult;
 import io.gravitee.policy.api.annotations.OnRequestContent;
 import io.gravitee.policy.webhook_signature_validator.configuration.WebhookSignatureValidatorPolicyConfiguration;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -53,6 +55,10 @@ public class WebhookSignatureValidatorPolicy {
     "WEBHOOK_SIGNATURE_TIMESTAMP_INVALID";
   private static final String WEBHOOK_SIGNATURE_TIMESTAMP_EXPIRED =
     "WEBHOOK_SIGNATURE_TIMESTAMP_EXPIRED";
+  private static final String WEBHOOK_SIGNATURE_TIMESTAMP_IN_FUTURE =
+    "WEBHOOK_SIGNATURE_TIMESTAMP_IN_FUTURE";
+  private static final String WEBHOOK_SIGNATURE_GENERATION_FAILED =
+    "WEBHOOK_SIGNATURE_GENERATION_FAILED";
 
   /**
    * Policy configuration
@@ -72,7 +78,7 @@ public class WebhookSignatureValidatorPolicy {
     ExecutionContext context,
     PolicyChain chain
   ) {
-    log.info("Executing WebhookSignatureValidatorPolicy...");
+    log.debug("Executing WebhookSignatureValidatorPolicy...");
 
     String secret = context
       .getTemplateEngine()
@@ -168,9 +174,7 @@ public class WebhookSignatureValidatorPolicy {
           }
         }
 
-        log.debug("Config> Secret: {}", secret);
         log.debug("Config> Algorithm: {}", algorithm);
-        log.debug("Config> Request Body: {}", buffer.toString());
 
         // Optionally, prefix any additional headers to HTTP body
         if (configuration.getSchemeType().isEnabled()) {
@@ -229,15 +233,23 @@ public class WebhookSignatureValidatorPolicy {
             configuration.getTimestampValidity().getClockSkew()
           );
 
-          if (
-            age > configuration.getTimestampValidity().getMaxSignatureAge() ||
-            age < -configuration.getTimestampValidity().getClockSkew()
-          ) {
+          if (age > configuration.getTimestampValidity().getMaxSignatureAge()) {
             chain.failWith(
               PolicyResult.failure(
                 WEBHOOK_SIGNATURE_TIMESTAMP_EXPIRED,
                 401,
                 "Webhook Signature Timestamp Expired"
+              )
+            );
+            return;
+          }
+
+          if (age < -configuration.getTimestampValidity().getClockSkew()) {
+            chain.failWith(
+              PolicyResult.failure(
+                WEBHOOK_SIGNATURE_TIMESTAMP_IN_FUTURE,
+                401,
+                "Webhook Signature Timestamp Is Too Far In The Future"
               )
             );
             return;
@@ -254,7 +266,27 @@ public class WebhookSignatureValidatorPolicy {
         log.debug("Final data (for signature creation): {}", data);
 
         // Generate and Validate HMAC Signature...
-        if (!validateHmacSignature(data, sourceSigHeader, secret, algorithm)) {
+        String generatedSignature = generateHmacSignature(
+          data,
+          secret,
+          algorithm
+        );
+
+        if (generatedSignature == null) {
+          log.error(
+            "Unable to compute the expected HMAC signature - check the configured secret and algorithm"
+          );
+          chain.failWith(
+            PolicyResult.failure(
+              WEBHOOK_SIGNATURE_GENERATION_FAILED,
+              401,
+              "Unable To Compute Webhook Signature"
+            )
+          );
+          return;
+        }
+
+        if (!signaturesMatch(generatedSignature, sourceSigHeader)) {
           log.error("Signature is NOT valid!");
           chain.failWith(
             PolicyResult.failure(
@@ -306,21 +338,15 @@ public class WebhookSignatureValidatorPolicy {
     }
   }
 
-  // Method to validate the HMAC signature
-  private boolean validateHmacSignature(
-    String data,
-    String providedSignature,
-    String secretKey,
-    String algorithm
+  // Method to compare two HMAC signatures in constant time, to avoid leaking timing
+  // information about how many leading bytes matched
+  private boolean signaturesMatch(
+    String generatedSignature,
+    String providedSignature
   ) {
-    // Generate the HMAC signature based on the data and the secret key
-    String generatedSignature = generateHmacSignature(
-      data,
-      secretKey,
-      algorithm
+    return MessageDigest.isEqual(
+      generatedSignature.getBytes(StandardCharsets.UTF_8),
+      providedSignature.getBytes(StandardCharsets.UTF_8)
     );
-
-    // Compare the generated signature with the provided signature (ignoring case)
-    return generatedSignature.equals(providedSignature);
   }
 }

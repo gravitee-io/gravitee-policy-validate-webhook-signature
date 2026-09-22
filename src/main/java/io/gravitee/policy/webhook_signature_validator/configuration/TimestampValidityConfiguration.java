@@ -33,11 +33,11 @@ public class TimestampValidityConfiguration {
   private String sourceTimestampHeader;
 
   // Delimiter placed between the timestamp header value and the rest of the signed content
-  private String delimiter;
+  private String delimiter = ".";
 
   // Maximum age (in seconds) a timestamp may have before the request is considered a replay
-  private long maxSignatureAge;
+  private long maxSignatureAge = 300;
 
   // Tolerance (in seconds) allowed for a timestamp that is ahead of the gateway's clock
-  private long clockSkew;
+  private long clockSkew = 60;
 }

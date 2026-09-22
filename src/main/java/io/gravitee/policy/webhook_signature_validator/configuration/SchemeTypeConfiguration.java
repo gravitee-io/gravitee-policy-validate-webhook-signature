@@ -40,7 +40,7 @@ public class SchemeTypeConfiguration {
   }
 
   // Optional - Delimiter used to separate each additional header value (and the body) when validating the Webhook signature
-  private String headersDelimiter;
+  private String headersDelimiter = ".";
 
   // Optional - List of additional headers to add to the Webhook signature creation
   private List<String> headers = new ArrayList<>();
