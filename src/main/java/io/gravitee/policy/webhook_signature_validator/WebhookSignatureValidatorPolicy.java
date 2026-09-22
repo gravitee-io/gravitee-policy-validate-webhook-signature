@@ -57,6 +57,8 @@ public class WebhookSignatureValidatorPolicy {
     "WEBHOOK_SIGNATURE_TIMESTAMP_EXPIRED";
   private static final String WEBHOOK_SIGNATURE_TIMESTAMP_IN_FUTURE =
     "WEBHOOK_SIGNATURE_TIMESTAMP_IN_FUTURE";
+  private static final String WEBHOOK_SIGNATURE_GENERATION_FAILED =
+    "WEBHOOK_SIGNATURE_GENERATION_FAILED";
 
   /**
    * Policy configuration
@@ -267,7 +269,27 @@ public class WebhookSignatureValidatorPolicy {
         log.debug("Final data (for signature creation): {}", data);
 
         // Generate and Validate HMAC Signature...
-        if (!validateHmacSignature(data, sourceSigHeader, secret, algorithm)) {
+        String generatedSignature = generateHmacSignature(
+          data,
+          secret,
+          algorithm
+        );
+
+        if (generatedSignature == null) {
+          log.error(
+            "Unable to compute the expected HMAC signature - check the configured secret and algorithm"
+          );
+          chain.failWith(
+            PolicyResult.failure(
+              WEBHOOK_SIGNATURE_GENERATION_FAILED,
+              401,
+              "Unable To Compute Webhook Signature"
+            )
+          );
+          return;
+        }
+
+        if (!signaturesMatch(generatedSignature, sourceSigHeader)) {
           log.error("Signature is NOT valid!");
           chain.failWith(
             PolicyResult.failure(
@@ -319,22 +341,12 @@ public class WebhookSignatureValidatorPolicy {
     }
   }
 
-  // Method to validate the HMAC signature
-  private boolean validateHmacSignature(
-    String data,
-    String providedSignature,
-    String secretKey,
-    String algorithm
+  // Method to compare two HMAC signatures in constant time, to avoid leaking timing
+  // information about how many leading bytes matched
+  private boolean signaturesMatch(
+    String generatedSignature,
+    String providedSignature
   ) {
-    // Generate the HMAC signature based on the data and the secret key
-    String generatedSignature = generateHmacSignature(
-      data,
-      secretKey,
-      algorithm
-    );
-
-    // Compare the generated signature with the provided signature using a constant-time
-    // comparison to avoid leaking timing information about how many leading bytes matched
     return MessageDigest.isEqual(
       generatedSignature.getBytes(StandardCharsets.UTF_8),
       providedSignature.getBytes(StandardCharsets.UTF_8)
