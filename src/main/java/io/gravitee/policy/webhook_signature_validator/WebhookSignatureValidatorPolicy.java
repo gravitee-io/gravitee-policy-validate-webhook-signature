@@ -26,6 +26,8 @@ import io.gravitee.policy.api.PolicyChain;
 import io.gravitee.policy.api.PolicyResult;
 import io.gravitee.policy.api.annotations.OnRequestContent;
 import io.gravitee.policy.webhook_signature_validator.configuration.WebhookSignatureValidatorPolicyConfiguration;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -331,7 +333,11 @@ public class WebhookSignatureValidatorPolicy {
       algorithm
     );
 
-    // Compare the generated signature with the provided signature (ignoring case)
-    return generatedSignature.equals(providedSignature);
+    // Compare the generated signature with the provided signature using a constant-time
+    // comparison to avoid leaking timing information about how many leading bytes matched
+    return MessageDigest.isEqual(
+      generatedSignature.getBytes(StandardCharsets.UTF_8),
+      providedSignature.getBytes(StandardCharsets.UTF_8)
+    );
   }
 }
