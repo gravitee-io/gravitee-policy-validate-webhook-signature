@@ -43,6 +43,11 @@ The "Signature" is based on the model that the sender must authenticate itself w
 |By default, this policy will validate the signature only against the HTTP body.  Set this boolean to 'true' to include additional headers (as well as the HTTP body) in the signature validation.
 ^.^| false
 
+.^|headersDelimiter
+^.^|-
+|Specify the delimiter used to separate each header and the body.  Must match the delimiter used by the Webhook Signature Generator policy that produced the signature.
+^.^| .
+
 .^|headers [List]
 ^.^|-
 |If the signature has been generated with additional headers (e.g. a timestamp), you will need to include (a List of) the names of those additional header(s).
@@ -68,6 +73,7 @@ The "Signature" is based on the model that the sender must authenticate itself w
   "policy": "webhook-signature-validator",
   "configuration": {
 	"schemeType": {
+	  "headersDelimiter": ".",
 	  "headers": [
 		"X-Another-Header-1",
 		"x-Another-header-2"
