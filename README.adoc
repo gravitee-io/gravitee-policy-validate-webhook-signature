@@ -51,7 +51,7 @@ The "Signature" is based on the model that the sender must authenticate itself w
 .^|secret
 ^.^|X
 |The secret key used to generate and verify the signature (Supports EL).
-^.^| 
+^.^|
 
 .^|algorithms
 ^.^|X
