@@ -39,7 +39,7 @@
         <!-- Gravitee dependencies for APIM -->
         <gravitee-apim.version>4.6.3</gravitee-apim.version>
         <!-- Maven plugins -->
-        <maven-plugin-assembly.version>3.7.1</maven-plugin-assembly.version>
+        <maven-plugin-assembly.version>3.8.0</maven-plugin-assembly.version>
         <maven-plugin-properties.version>1.2.1</maven-plugin-properties.version>
         <!-- Property used by the publication job in CI-->
         <publish-folder-path>graviteeio-ee/apim/plugins/policies</publish-folder-path>
